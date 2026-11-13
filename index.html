@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget 50k - 14-27 Nov</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f0f0f;color:#fff;padding:16px;max-width:480px;margin:auto}
+h1{font-size:20px}
+.card{background:#1c1c1c;border-radius:12px;padding:12px;margin:10px 0;display:flex;justify-content:space-between;align-items:center}
+input{width:90px;background:#2a2a2a;border:1px solid #444;color:#fff;padding:6px;border-radius:8px;text-align:right}
+.total{position:sticky;bottom:0;background:#111;padding:12px;border-radius:12px;margin-top:16px;border:1px solid #333}
+button{background:#fff;color:#000;border:0;padding:10px 14px;border-radius:10px;font-weight:700;width:100%;margin-top:10px}
+.small{font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<h1>💸 Budget 50k / Hari</h1>
+<p class="small">14-27 Nov 2026 | Total 1.2jt | Target sisa 500rb<br>Data auto kesimpen di HP, jangan hapus cache browser.</p>
+<div id="list"></div>
+<div class="total">
+<div style="display:flex;justify-content:space-between"><span>Total Kepake:</span><b id="used">Rp 0</b></div>
+<div style="display:flex;justify-content:space-between"><span>Sisa dari 1.2jt:</span><b id="remain" style="color:#4ade80">Rp 1.200.000</b></div>
+<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="small">Target sisa:</span><span class="small">Rp 500.000</span></div>
+<button onclick="resetAll()">Reset Semua</button>
+</div>
+<script>
+const start = new Date('2026-11-14');
+const end = new Date('2026-11-27');
+const days = [];
+for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+  days.push(new Date(d).toISOString().slice(0,10));
+}
+const list = document.getElementById('list');
+function load(){ return JSON.parse(localStorage.getItem('budget50k')||'{}'); }
+function save(data){ localStorage.setItem('budget50k', JSON.stringify(data)); calc(); }
+function calc(){
+  const data = load();
+  let total=0;
+  days.forEach(day=>{ total+= parseInt(data[day]||0); });
+  document.getElementById('used').innerText='Rp '+total.toLocaleString('id-ID');
+  const remain = 1200000 - total;
+  const el = document.getElementById('remain');
+  el.innerText='Rp '+remain.toLocaleString('id-ID');
+  el.style.color = remain>=500000 ? '#4ade80' : '#f87171';
+}
+function render(){
+  const data = load();
+  list.innerHTML='';
+  days.forEach(day=>{
+    const div=document.createElement('div');
+    div.className='card';
+    div.innerHTML=`<div><b>${day}</b><br><span class="small">Target 50k</span></div><input type="number" inputmode="numeric" placeholder="0" value="${data[day]||''}" oninput="onEdit('${day}', this.value)">`;
+    list.appendChild(div);
+  });
+  calc();
+}
+function onEdit(day, val){
+  const data=load();
+  data[day]=val;
+  save(data);
+}
+function resetAll(){
+  if(confirm('Yakin reset semua?')){
+    localStorage.removeItem('budget50k');
+    render();
+  }
+}
+render();
+</script>
+</body>
+</html>
