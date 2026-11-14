@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget 50k - 14-27 Nov</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f0f0f;color:#fff;padding:16px;max-width:480px;margin:auto}
+h1{font-size:20px}
+.card{background:#1c1c1c;border-radius:12px;padding:12px;margin:10px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}
+input{width:100px;background:#2a2a2a;border:1px solid #444;color:#fff;padding:8px;border-radius:8px;text-align:right}
+input:disabled{opacity:.5}
+.total{position:sticky;bottom:0;background:#111;padding:12px;border-radius:12px;margin-top:16px;border:1px solid #333}
+button{background:#fff;color:#000;border:0;padding:12px 14px;border-radius:10px;font-weight:700;width:100%;margin-top:10px;cursor:pointer}
+button.secondary{background:#2a2a2a;color:#fff}
+.small{font-size:12px;color:#999}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.badge.editor{background:#4ade80;color:#000}
+.badge.viewer{background:#fbbf24;color:#000}
+.banner{padding:10px;border-radius:10px;font-size:13px;margin:10px 0}
+.banner.ok{background:#14532d}
+.banner.err{background:#7f1d1d}
+label{font-size:13px;color:#bbb}
+.field{margin:10px 0}
+.field input{width:100%;text-align:left}
+.progress{height:10px;background:#2a2a2a;border-radius:999px;overflow:hidden;margin:8px 0}
+.progress > div{height:100%;background:#4ade80}
+</style>
+</head>
+<body>
+<div id="loginView">
+<h1>Budget 50k - Login</h1>
+<p class="small">Login pakai akun Firebase. Editor bisa edit, Viewer cuma lihat.</p>
+<div class="field"><label>Email</label><br><input id="email" type="email" placeholder="editor@budget.id"></div>
+<div class="field"><label>Password</label><br><input id="pass" type="password" placeholder="password"></div>
+<button id="btnLogin">Masuk</button>
+<p class="small">Demo:<br>Editor: editor@budget.id / editor123<br>Viewer: viewer@budget.id / viewer123</p>
+<div id="loginMsg"></div>
+</div>
+
+<div id="appView" style="display:none">
+<h1>💸 Budget 50k / Hari <span id="roleBadge" class="badge editor">Editor</span></h1>
+<p class="small">14-27 Nov 2026 | Total 1.2jt | Target sisa 500rb<br><span id="conn">Menghubungkan ke Firebase...</span> <button id="btnLogout" style="width:auto;padding:6px 10px;margin:0">Logout</button></p>
+<div id="list"></div>
+<div class="total">
+<div style="display:flex;justify-content:space-between"><span>Total Kepake:</span><b id="used">Rp 0</b></div>
+<div style="display:flex;justify-content:space-between"><span>Sisa dari 1.2jt:</span><b id="remain" style="color:#4ade80">Rp 1.200.000</b></div>
+<div class="progress"><div id="prog" style="width:0%"></div></div>
+<div style="display:flex;justify-content:space-between"><span class="small">Jatah belanja 700rb (50k x 14 hari)</span><span class="small" id="pct">0%</span></div>
+<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="small">Target sisa:</span><span class="small">Rp 500.000</span></div>
+<button id="btnSave">Simpan ke Cloud</button>
+<button id="btnReset" class="secondary">Reset Semua</button>
+<p class="small" id="saveMsg"></p>
+</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBILmaxwL9H3BpKymWZon46T0bzYPDctGc",
+  authDomain: "budget-50k.firebaseapp.com",
+  projectId: "budget-50k",
+  storageBucket: "budget-50k.firebasestorage.app",
+  messagingSenderId: "690774780637",
+  appId: "1:690774780637:web:003c1c8531c7b9fded8934"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const start = new Date('2026-11-14');
+const end = new Date('2026-11-27');
+const days = [];
+for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){ days.push(d.toISOString().slice(0,10)); }
+
+let currentUser = null;
+let isEditor = false;
+let localData = {};
+let unsub = null;
+
+const listEl = document.getElementById('list');
+function render(){
+  listEl.innerHTML='';
+  days.forEach(day=>{
+    const div=document.createElement('div');
+    div.className='card';
+    const val = localData[day]?.amount || '';
+    const note = localData[day]?.note || '';
+    div.innerHTML = `<div><b>${day}</b><br><span class="small">Target 50k</span><br><input class="note" data-day="${day}" placeholder="catatan" value="${note}" ${isEditor?'':'disabled'} style="width:140px;text-align:left;margin-top:6px"></div><input type="number" inputmode="numeric" placeholder="0" value="${val}" data-day="${day}" ${isEditor?'':'disabled'}>`;
+    listEl.appendChild(div);
+  });
+  // bind
+  listEl.querySelectorAll('input[type="number"]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const day=e.target.dataset.day;
+      if(!localData[day]) localData[day]={};
+      localData[day].amount = e.target.value;
+      calc();
+    });
+  });
+  listEl.querySelectorAll('input.note').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const day=e.target.dataset.day;
+      if(!localData[day]) localData[day]={};
+      localData[day].note = e.target.value;
+    });
+  });
+  calc();
+}
+function calc(){
+  let total=0;
+  days.forEach(day=>{ total+= parseInt(localData[day]?.amount||0) || 0; });
+  document.getElementById('used').innerText='Rp '+total.toLocaleString('id-ID');
+  const remain = 1200000 - total;
+  const el=document.getElementById('remain');
+  el.innerText='Rp '+remain.toLocaleString('id-ID');
+  el.style.color = remain>=500000 ? '#4ade80' : '#f87171';
+  const pct = Math.min(100, Math.round(total/700000*100));
+  document.getElementById('prog').style.width = pct+'%';
+  document.getElementById('pct').innerText = pct+'% dari jatah';
+}
+function startListener(){
+  const ref = doc(db, "budget", "nov-14-27");
+  if(unsub) unsub();
+  unsub = onSnapshot(ref, (snap)=>{
+    if(snap.exists()){
+      localData = snap.data().days || {};
+      document.getElementById('conn').innerText = 'Tersambung ke Firebase - budget-50k';
+      render();
+    } else {
+      document.getElementById('conn').innerText = 'Tersambung ke Firebase - belum ada data';
+      render();
+    }
+  }, (err)=>{
+    document.getElementById('conn').innerText = 'Gagal: '+err.message;
+  });
+}
+document.getElementById('btnLogin').addEventListener('click', async ()=>{
+  const email=document.getElementById('email').value.trim();
+  const pass=document.getElementById('pass').value;
+  const msg=document.getElementById('loginMsg');
+  try{
+    await signInWithEmailAndPassword(auth, email, pass);
+  }catch(e){ msg.innerHTML='<div class="banner err">'+e.message+'</div>'; }
+});
+document.getElementById('btnLogout').addEventListener('click', async ()=>{ await signOut(auth); });
+document.getElementById('btnSave').addEventListener('click', async ()=>{
+  if(!isEditor) return;
+  const ref = doc(db, "budget", "nov-14-27");
+  await setDoc(ref, { days: localData, updatedAt: new Date().toISOString() }, { merge:true });
+  document.getElementById('saveMsg').innerText='Tersimpan ke cloud ✓ '+new Date().toLocaleTimeString('id-ID');
+  setTimeout(()=>document.getElementById('saveMsg').innerText='',3000);
+});
+document.getElementById('btnReset').addEventListener('click', async ()=>{
+  if(!isEditor) return;
+  if(!confirm('Yakin reset semua?')) return;
+  localData={};
+  const ref = doc(db, "budget", "nov-14-27");
+  await setDoc(ref, { days: {} }, { merge:true });
+  render();
+});
+onAuthStateChanged(auth, (user)=>{
+  currentUser=user;
+  if(user){
+    isEditor = user.email === 'editor@budget.id';
+    document.getElementById('loginView').style.display='none';
+    document.getElementById('appView').style.display='block';
+    const badge=document.getElementById('roleBadge');
+    badge.innerText = isEditor ? 'Editor' : 'Viewer';
+    badge.className = 'badge ' + (isEditor?'editor':'viewer');
+    document.getElementById('btnSave').style.display = isEditor?'block':'none';
+    document.getElementById('btnReset').style.display = isEditor?'block':'none';
+    startListener();
+  } else {
+    document.getElementById('loginView').style.display='block';
+    document.getElementById('appView').style.display='none';
+    if(unsub) unsub();
+  }
+});
+render();
+</script>
+</body>
+</html>
