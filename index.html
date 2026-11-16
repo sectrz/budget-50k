@@ -174,10 +174,28 @@ function renderEditor(){
   const list=document.getElementById('listE'); list.innerHTML='';
   days.forEach((day,i)=>{
     const div=document.createElement('div'); div.className='day'; const amt=parseInt(localData[day]?.amount||0)||0; const sisaHari=50000-amt;
-    div.innerHTML=`<div class="head"><span class="small">Hari ${i+1} • ${day}</span><span class="pill">Target Rp 50.000</span></div><div class="date">${fmtDate(day)}</div><label style="margin-top:12px">Kepake hari ini</label><input type="number" inputmode="numeric" placeholder="Rp" data-day="${day}" value="${localData[day]?.amount||''}"><div style="color:var(--green);font-size:13px;margin-top:8px">Sisa harian: ${fmt(sisaHari)}</div><input class="note" data-day="${day}" placeholder="Catatan (opsional)" value="${localData[day]?.note||''}" style="margin-top:8px;font-size:14px">`;
+    div.innerHTML=`<div class="head"><span class="small">Hari ${i+1} • ${day}</span><span class="pill">Target Rp 50.000</span></div><div class="date">${fmtDate(day)}</div><label style="margin-top:12px">Kepake hari ini</label><input type="number" inputmode="numeric" placeholder="Rp" data-day="${day}" value="${localData[day]?.amount||''}"><div class="sisa-harian" style="color:var(--green);font-size:13px;margin-top:8px">Sisa harian: ${fmt(sisaHari)}</div><input class="note" data-day="${day}" placeholder="Catatan (opsional)" value="${localData[day]?.note||''}" style="margin-top:8px;font-size:14px">`;
     list.appendChild(div);
   });
-  list.querySelectorAll('input[type="number"]').forEach(inp=>{ inp.addEventListener('input',e=>{ const day=e.target.dataset.day; if(!localData[day]) localData[day]={}; localData[day].amount=e.target.value; renderEditor(); }); });
+  // FIX KEYBOARD: jangan rebuild semua card tiap ketik, cuma update angka total + sisa di card itu aja, biar fokus nggak ilang
+  list.querySelectorAll('input[type="number"]').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const day=e.target.dataset.day; if(!localData[day]) localData[day]={}; localData[day].amount=e.target.value;
+      // update total tanpa rebuild
+      const total=calcTotal(); const remain=1200000-total; const filled=days.filter(d=> (localData[d]?.amount||'')!=='').length;
+      document.getElementById('usedE').innerText=fmt(total);
+      document.getElementById('remainE').innerText=fmt(remain); document.getElementById('remainE').style.color=remain>=500000?'var(--green)':'var(--red)';
+      document.getElementById('pctE').innerText=Math.round(total/700000*100)+'%';
+      document.getElementById('sisaJatahE').innerText='Sisa jatah '+fmt(Math.max(0,700000-total));
+      document.getElementById('filledE').innerText=filled+' dari 14 hari sudah terisi';
+      const prog=Math.round(remain/1200000*100); document.getElementById('progE').style.width=prog+'%'; document.getElementById('progTxtE').innerText=prog+'% dari modal';
+      const st=document.getElementById('statusE'); st.innerText=remain>=500000?'Masih aman: sisa di atas atau sama dengan target.':'Bahaya: sisa di bawah target 500rb!'; st.className=remain>=500000?'status-ok':'status-bad';
+      // update sisa harian di card yang lagi diketik aja, tanpa rebuild
+      const card=e.target.closest('.day'); if(card){ const sisaEl=card.querySelector('.sisa-harian'); if(sisaEl){ const amt=parseInt(e.target.value||0)||0; sisaEl.innerText='Sisa harian: '+fmt(50000-amt); } }
+    });
+    // cegah scroll lompat pas keyboard muncul
+    inp.addEventListener('focus',e=>{ setTimeout(()=>{ e.target.scrollIntoView({block:'center',behavior:'smooth'}); },300); });
+  });
   list.querySelectorAll('input.note').forEach(inp=>{ inp.addEventListener('input',e=>{ const day=e.target.dataset.day; if(!localData[day]) localData[day]={}; localData[day].note=e.target.value; }); });
 }
 function renderViewer(){
